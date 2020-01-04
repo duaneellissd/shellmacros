@@ -1,14 +1,17 @@
 
-__all__ = [ 'MacroRecursion', 'MacroUndefined','MacroSyntax','MacroBadName']
+__all__ = [ 'MacroRecursionError', 'MacroUndefinedError','MacroSyntaxError','MacroBadNameError','MacroNonAsciiError']
 
-class MacroRecursion(Exception):
+class MacroRecursionError(Exception):
     pass
 
-class MacroUndefined(Exception):
+class MacroUndefinedError(Exception):
     pass
 
-class MacroSyntax(Exception):
+class MacroSyntaxError(Exception):
     pass
 
-class MacroBadName(Exception):
+class MacroBadNameError(Exception):
+    pass
+
+class MacroNonAsciiError(Exception):
     pass

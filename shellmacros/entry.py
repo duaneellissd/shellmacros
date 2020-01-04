@@ -3,11 +3,13 @@ import re
 __all__ = [ 'MacroEntry' ]
 
 
-from .exceptions import MacroBadName
+from .exceptions import MacroBadNameError
 
 # C sytle variable name 
 #   <letter_or_under><letter|digits|under>...
 valid_name = re.compile( r'[A-Za-z_][A-Z0-9]*')
+
+_counter = 0
 
 class MacroEntry( object ):
     '''
@@ -34,16 +36,21 @@ class MacroEntry( object ):
     Or may be marked as externally defined
     '''
     
-    def __init__( self, name, value= None ):
+    def __init__( self, name, value= None, validate=True):
         self._filename = None
         self._lineno = None
-
+        # keep track of the order macros where created
+        # used later to generate output in order
+        global _counter
+        self._order = _counter
+        _counter += 1
         self.name = name
         '''The name of this macro, for example FOO=BAR, the value FOO'''
 
         # Names must be reasonable and conform to C langauge variable specification
-        if None == valid_name.match( name ):
-            raise MacroBadName("bad-macro-name: %s" % name )
+        if validate:
+            if valid_name.match( name ) is None:
+                raise MacroBadNameError("bad-macro-name: %s" % name )
 
         self.value = value
         '''The value of this macro. Note value can be None
@@ -72,6 +79,17 @@ class MacroEntry( object ):
         for example we might want the ${CROSS_COMPILE} macro to be expanded by Make later
         and thus, the ${CC} macro would also be expanded later
         '''
+        self.env = False
+        '''Is this a macro from the Environment Variables?'''
+
+        self.eq_make='='
+        '''Type of equal sign to use for Makefile macros'''
+
+        self.eq_bash='='
+        '''Type of equal sign to use for Bash scripts'''
+
+        self.quoted=False
+        '''If true, when expanding always quote this'''
 
     def str_where(self):
         '''Return a string representing where the maro was defined'''

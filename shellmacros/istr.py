@@ -11,6 +11,15 @@ RBRACE = ord('}')
 LPAREN  = ord('(')
 RPAREN  = ord(')')
 
+class IStrFindResult(object):
+    OK = 0
+    NOTFOUND = 1
+    SYNTAX = 2
+    def __init__(self):
+        self.result = IStrFindResult.SYNTAX
+        self.lhs = 0
+        self.rhs = 0
+        self.name = None
 
 class IStr(list):
     '''
@@ -79,40 +88,67 @@ class IStr(list):
         If syntax error, return (-2,-2)
         '''
 
-        rhs = self.locate(RBRACE, lhs,rhs)
-        if rhs >= 0:
+        result = IStrFindResult()
+        result.lhs = lhs
+        result.rhs = rhs
+        # if it is not long enough...
+        if (rhs - lhs) < 4:
+            result.code = result.NOTFOUND
+            return result
+
+        # We search for the CLOSING
+        # Consider nested: ${ ${foo}_${bar} }
+        # The first thing we must do is "foo"
+        # So find the close
+        tmp = self.locate(RBRACE, result.lhs,result.rhs)
+        if tmp >= 0:
             _open_symbol = LBRACE
         else:
-            rhs = self.locate(RPAREN,lhs,rhs)
-            _open_symbol = LPAREN
+            tmp = self.locate(RPAREN,result.lhs,result.rhs)
+            _open_symbol = RPAREN
 
-        if rhs < 0:
+        if tmp < 0:
             # not found
-            return (-1, -1, None)
+            result.code = result.NOTFOUND
+            return result
 
-        lhs = -1
-        while lhs < rhs:
-            # find our DOLLAR
-            lhs = self.locate(DOLLAR, lhs + 1, rhs)
-            if lhs < 0:
-                # a stray RBRACE syntax error
-                return (-2, -2, None)
+        # We want to end at RHS where the closing symbol is
+        result.rhs = tmp
+        while result.lhs < result.rhs:
+            # find DOLLAR
+            dollar_loc = self.locate(DOLLAR, result.lhs, result.rhs)
+            if dollar_loc < 0:
+                # above, we know we have a CLOSE
+                # We could call this a SYNTAX error
+                # but ... we won't we'll leave this as NOT FOUND
+                result.code = result.NOTFOUND
+                return result
 
-            # Look for $ then {, we have } already
-            ch = self[lhs + 1]
+            # we have:  DOLLAR  + CLOSE
+            # Can we find DOLLAR + OPEN?
+            ch = self[dollar_loc+1]
             if ch != _open_symbol:
-                # stray dollar, we ignore
+                # Nope... try again after dollar
+                result.lhs = dollar_loc+1
                 continue
 
-                # Do we have a nested macro, ie: ${${x}}
-            tmp = self.locate(DOLLAR, lhs + 1, rhs)
-            if tmp > 0:
-                lhs = tmp - 1
+            result.lhs = dollar_loc
+            # Do we have a nested macro, ie: ${${x}}
+            tmp = self.locate(DOLLAR, dollar_loc + 1, result.rhs)
+            if tmp >= 0:
+                # we do have a nested macro
+                result.lhs =  tmp
                 continue
             # nope, we are good
-            return (lhs, rhs + 1, self.sslice(lhs + 2, rhs))
+            # Everything between LHS and RHS should be a macro
+            result.code = result.OK
+            result.name = self.sslice(result.lhs + 2, result.rhs)
+            # the RHS should include the closing symbol
+            result.rhs += 1
+            return result
         # not found syntax stray  dollar or brace
-        return (-2, -2, None)
+        result.code = result.SYNTAX
+        return result
 
 
 def test_istr():
@@ -121,12 +157,14 @@ def test_istr():
         print("Check (%d,%d)" % (l, r))
         print("s = %s" % str(dut))
         print("i = %s" % dut.iarray())
-        (lt, rt, text) = dut.next_macro(0, len(dut))
-        if (lt != l) or (rt != r):
+        result = dut.next_macro(0, len(dut))
+        if (result.lhs != l) or (result.rhs != r):
             print("str = %s" % str(dut))
             print("int = %s" % dut.iarray())
-            print("Error: (%d,%d) != (%d,%d)" % (l, r, lt, rt))
+            print("Error: (%d,%d) != (%d,%d)" % (l, r, result.lhs, result.rhs))
             assert (False)
+        if text is not None:
+            assert( result.name == text )
         dut.mark(l, r)
         return dut
 

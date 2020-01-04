@@ -32,9 +32,15 @@ class MacroResult(object):
         self.error = None
         '''If an error occurs, this holds an Exception to throw'''
         self.keep = None
-        '''Points to the first macro found that is marked as a KEEP macro'''
-        self.external = None
         '''Points to the first macro found that is marked as a EXTERNAL macro'''
+        self.references = []
+        '''List of macros that where used to resolve this string
+        See MacroEngine.resolve_text() for details
+        '''
+        self.undefined = []
+        '''When resolving for references, these undefined macros where found
+        See MacroEngine.resolve_text() for details
+        '''
 
     @property
     def result(self):
@@ -56,12 +62,7 @@ class MacroResult(object):
             self.history.append(text)
             return
         # overflow
-        s = []
-        s.append("does not resolve: %s" % self.text_in)
-        for x in range(MAX_RECURSION - 3, MAX_RECURSION):
-            s.append("pass: %d: %s" % (x, self.history[x]))
-        s = '\n'.join(s)
-        raise MacroRecursion(s)
+        self.declare_recursion()
 
     def replace(self,lhs,rhs,value):
         '''Replace text between LHS and RHS with some value'''
@@ -77,7 +78,13 @@ class MacroResult(object):
         '''Declare a syntax error, we cannot go further'''
         self.ok = False
         self.done = True
-        self.error = MacroSyntax("syntax: %s -> %s" % (self.history[0], self.history[-1]))
+        self.error = MacroSyntaxError("syntax: %s -> %s" % (self.history[0], self.history[-1]))
+
+    def declare_recursion(self):
+        '''Delcare a recursion error'''
+        self.ok = False
+        self.done = True
+        self.error = MacroRecursionError("Recursion start: %s, now: %s" % (self.history[0], str(self.istr)))
 
     def declare_undefined(self,name, isext):
         '''Declare an undefined variable, we cannot go further'''
@@ -86,9 +93,11 @@ class MacroResult(object):
         s = "undefined: %s -> %s undefined: %s" % (self.history[0], self.history[-1], name)
         if isext:
             s = "external-" + s
-        self.error = MacroUndefined(s)
+        self.error = MacroUndefinedError(s)
 
     def declare_success(self):
         '''Declare success, we are done'''
         self.ok = True
         self.done = True
+
+

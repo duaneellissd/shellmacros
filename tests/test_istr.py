@@ -1,10 +1,13 @@
-from unittest import FunctionTestCase
+import sys
+
+sys.path.insert(0,"..")
+import unittest
 
 import shellmacros
 
-class TestIStr(FunctionTestCase):
-    def __init__(self):
-        foo = IStr('dog')
-        FunctionTestCase.__init__(self, shellmacros.istr.test_istr)
+class TestISTR( unittest.TestCase ):
+    def test_ONE( self ):
+        shellmacros.istr.test_istr
 
-
+if __name__ == '__main__':
+    unittest.main()

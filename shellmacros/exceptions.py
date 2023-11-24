@@ -15,3 +15,4 @@ class MacroBadNameError(Exception):
 
 class MacroNonAsciiError(Exception):
     pass
+

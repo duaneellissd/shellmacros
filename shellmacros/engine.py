@@ -70,12 +70,40 @@ class MacroEngine(object):
     RESOLVE_REFERENCES = 2
 
     def __init__(self):
+        self.debug = False
         self.macros = dict()
         '''The macros, key: macro name, item=MacroEntry()'''
         self.use_env = False
         '''Should SHELL env variables be auto imported?'''
         self.ascii_check = True
         '''Should result strings be verified they are 100% pure ascii text?'''
+        self._cache = dict()
+
+    def debug_enable(self):
+        self.debug = True
+    def debug_disable(self):
+        self.debug = False
+
+    def cache_reset( self ):
+        '''
+        Resets/empties the name/value cache
+        '''
+        self._cache = dict()
+        
+    def cache_update( self ):
+        '''
+        Convert and expand every name/value in the normal way.
+        '''
+        self.cache_reset()
+        self._cache = dict()
+        for n, v in self.macros.items():
+            if self.debug:
+                print("%s=%s" % (n,v.value))
+            if v.value is None:
+                continue
+            v = self.resolve_simple( v.value, self.RESOLVE_NORMAL );
+            self._cache[n] = v
+    
 
     def add(self, name, value):
         '''Add a standard macro, ie: name = value, returns the added macro'''
@@ -118,14 +146,85 @@ class MacroEngine(object):
         '''
         Mark this macro as a "keep" macro
         '''
-        self.macros[name].keep = True
+        m = self.macros.get( name, None )
+        if m is None:
+            raise KeyError("no such macro named: %s" % name )
+        m.keep = True
 
     def mark_macro_external(self, name):
         '''
         Mark this macro as some thing that is externally defined.
         '''
-        self.macros[name].external = True
+        m = self.macros.get( name, None )
+        if m is None:
+            raise KeyError("no such macro named: %s" % name )
+        m.external = True
 
+    def unresolve_text( self, text, how = RESOLVE_NORMAL ):
+        old = None
+        done = False
+        passes = 0
+        history = [];
+        self.cache_update()
+        text = self.resolve_simple( text, how )
+        while not done:
+            if self.debug:
+                print("TEXT = %s" % text )
+            longest = None
+            if len( history ) > 50:
+                # Recursion has gone crazy
+                raise MacroRecursionError("Unresolve Recursion?")
+               
+            for name,value in self._cache.items():
+                # does the text contain this macro?
+                if value not in text:
+                    # Nope, then move on.
+                    if self.debug:
+                        print("NOT FOUND:     text: %s" % text )
+                        print("NOT FOUND: canidate: %s" % value )
+                    continue
+
+                if self.debug:
+                    print("MATCH:     name: %s" % name )
+                    print("MATCH: canidate: %s" % value )
+                    print("MATCH:     text: %s" % text )
+                
+                # Our heuristic here is: GREEDY
+                # We want the longest transform
+                if longest is None:
+                    longest = (name,value)
+                    continue
+                # Is new value a better(heuristic: greedy)
+                if len(value) > len(longest[1]):
+                    if self.debug:
+                        print("old: %s=%s" % (longest[0],longest[1]) )
+                        print("new: %s=%s" % (name,value))
+                    longest = (name,value)
+            # if nothing found we are done.
+            if longest is None:
+                done = True
+                continue
+            # We have a canidate to replace with.
+            # [0] = macro name
+            # [1] = macro value
+            if self.debug:
+                print("TEXT: %s" % text )
+                print("replace with %s=%s" % (longest[0], longest[1] ))
+            newtext = text.replace( longest[1], "${" + longest[0] + "}" )
+            history.append( (text, newtext) )
+            text = newtext
+
+        if self.debug:
+            print("DONE, result: %s" % text )
+        return text;
+
+
+    def resolve_simple( self, text, how=RESOLVE_NORMAL ):
+        r = self.resolve_text( text, how )
+        if not r.ok:
+            raise r.error()
+        return r.result
+        
     def resolve_text(self, text, how=RESOLVE_NORMAL):
         '''Given text - resolve macros found in this text.
 

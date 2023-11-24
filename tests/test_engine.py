@@ -1,9 +1,11 @@
-from unittest import TestCase
+import sys
+import unittest
+
+sys.path.insert(0,"..")
 
 import shellmacros
 
-
-class TestMacroEngine(TestCase):
+class TestMacroEngine(unittest.TestCase):
     def setup1(self):
         e = shellmacros.MacroEngine()
         e.add('zack_dog', 'dolly')
@@ -184,3 +186,7 @@ class TestMacroEngine(TestCase):
         s=e.bash_fragment_str()
         print("BASH RESULT\n-----\n%s\n------\n" % s )
         print("")
+
+        
+if __name__ == '__main__':
+    unittest.main()
